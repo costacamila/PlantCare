@@ -10,7 +10,7 @@ from time import sleep
 
 def talker_init_main(x, y, theta):
     
-    # escrevo mensagem no formato PoseWithCovarianceStamped no topico initialpose
+    # publisher que escreve mensagem de estrutura PoseWithCovarianceStamped no tópico initialpose
     pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped, queue_size=10)
     rate = rospy.Rate(10)
 
@@ -28,19 +28,15 @@ def talker_init_main(x, y, theta):
         rospy.loginfo(msg)
         pub.publish(msg)
         rate.sleep()
-        rospy.loginfo(msg) #A posição inicial só é aceita após a segunda publicação (?)
+        # a posição inicial só é aceita após a segunda publicação
+        rospy.loginfo(msg)
         pub.publish(msg)
     
-def set_goal():
-
-    # defino os destinos com as posicoes x e y e orientacao theta
-    x = [-3.5, -4.0, -3.0]
-    y = [-0.5, -1.0, 1.0]
-    theta = [3.14, 1.57, 0.0]
+def set_goal(x, y, theta, plants):
 
     goals = []
 
-    for i in range(3):
+    for i in range(plants+1):
         goals.append(PoseStamped())
         goals[i].header.frame_id = 'map'
         goals[i].pose.position.x = x[i]
@@ -54,12 +50,13 @@ def set_goal():
 
 
 def listener_callback(data):
+    # variavél global pois a listener_callback está sendo chamada indiretamente sendo impossível retornar valor
     global status
     status = data.status.status
 
 def talker_route_main(goal):
     
-    # escrevo mensagem de estrutura PoseStamped no topico move_base_simple/goal
+    # publisher que escreve mensagem de estrutura PoseStamped no tópico move_base_simple/goal
     pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
     rate = rospy.Rate(4)
     
@@ -68,26 +65,49 @@ def talker_route_main(goal):
         rospy.loginfo(goal)
         pub.publish(goal)
         rate.sleep()
-        rospy.loginfo(goal) #O destino só é aceito após a segunda publicação
+        # o destino só é aceito após a segunda publicação
+        rospy.loginfo(goal)
         pub.publish(goal)
           
 if __name__ == '__main__':
-        
-    initial_x = -3.0
-    initial_y = 1.0
-    initial_theta = 0.0
 
-    rospy.init_node('plant_goal')
+    initial = [-2.0, -0.5, 0.0]
+
+    x = []
+    y = []
+    theta = []
+
+    plants = eval(input("Digite a quantidade de plantas a serem regadas: "))
+
+    for i in range(plants):
+        x.append(eval(input("Digite a posição no eixo x para o robô navegar até a planta "+str(i+1)+": ")))
+        y.append(eval(input("Digite a posição no eixo y para o robô navegar até a planta "+str(i+1)+": ")))
+        theta.append(eval(input("Digite a rotação em radianos para o robô se orientar em relação a planta "+str(i+1)+": ")))
+
+    x.append(initial[0])
+    y.append(initial[1])
+    theta.append(initial[2])
+
+    # opção hard coded (comentar da linha 76 até 89 para funcionar)
+    # plants = 3
+    # x = [-0.5, 0.5, 1.5]
+    # y = [1.0, 0.0, -1.0]
+    # theta = [3.14, 3.14, 3.14]
+
+    # inicio o nó plant_routine
+    rospy.init_node('plant_routine')
     
-    talker_init_main(initial_x, initial_y, initial_theta)
+    talker_init_main(initial[0], initial[1], initial[2])
 
     status = 0
-    poses = set_goal()
+    poses = set_goal(x, y, theta, plants)
     
-    for i in range(3):
+    for i in range(plants+1):
         talker_route_main(poses[i])
         sleep(2)
         while not rospy.is_shutdown():
+            # enquanto o nó estiver ativo se inscreve no tópico move_base/result com mensagem de estrutura MoveBaseActionResult
+            # chama a listener_callback passando a mensagem de estrutura MoveBaseActionResult
             rospy.Subscriber('/move_base/result', MoveBaseActionResult, listener_callback)
             if status == 3:
-                break 
+                break
